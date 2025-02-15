@@ -130,7 +130,7 @@ Currently optimized for:
 
 ### Core Technologies
 - Thanks to [@apple](https://apple.com) for developing the Apple Neural Engine 
-- Thanks to Appel CoreML Tools team for providing the tools https://github.com/apple/coremltools
+- Thanks to Apple CoreML Tools team for providing the tools https://github.com/apple/coremltools
 - Thanks to [@huggingface](https://huggingface.co) for providing the transformers library and models
 
 ### Inspirations, feedback and other resources
