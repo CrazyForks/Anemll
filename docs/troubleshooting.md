@@ -2,6 +2,16 @@
 
 This document provides solutions to common issues encountered while using the Anemll project.
 
+Model conversion script provides dependecies checks during start up
+It checks for Python, pip, coremltools, coremlcompiler, and macOS version.
+We also check for supported model architectures and quantization.
+
+Script is located in `./anemll/utils/check_dependencies.sh`
+
+Parent script is `./anemll/utils/convert_model.sh`
+
+If you confident it's incorrectly reporting an issue, you can skip the check by adding `--skip-check` flag to convert_model.sh
+
 ## Common Issues
 
 ### 1. Python Not Installed

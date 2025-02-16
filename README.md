@@ -14,17 +14,17 @@ We aim to:
 See [Roadmap.md](./docs/Roadmap.md) for more details
 
 > [!Important]
-> This is Alpha Release 0.1.1 for the library. It is designed to process Model Weights directly from Hugging Face models and convert them to the CoreML format for Apple Neural Engine (ANE for short).
+> This is Alpha Release 0.1.2 for the library. It is designed to process Model Weights directly from Hugging Face models and convert them to the CoreML format for Apple Neural Engine (ANE for short).
 > - This release only supports LLAMA models including DeepSeek distilled models on LLaMA 3.1 architecture
 > - The future release will add support for more models and architectures
+> - Please visit https://huggingface.co/anemll where we uload the latest models and X: [@anemll](https://x.com/anemll) for updates
+> - Please star this repo to support the project!
 
+### New in 0.1.2 🚀
+- Dependency checks and troubleshooting guide [docs/troubleshooting.md](./docs/troubleshooting.md) added
+- Prefill batch size added to the conversion script
+- Chat_full interface updated for DeepHermes "think" token "/t" and both chat interfaces added --nw flag to skip warmup step ( [docs/chat.md](./docs/chat.md) )
 
-### New in 0.1.1 🚀
-- Single-shot model conversion with [Convert Model Script](./docs/convert_model.md)
-- Simplified model configuration with [meta.yaml](./docs/chat.md)
-- Automated Hugging Face distribution preparation with [prepare_hf.sh](./docs/prepare_hf.md)
-- Enhanced Chat Interfaces with better error handling and configuration support - see [chat.md](./docs/chat.md)
-- Improved LLaMA model with prefill optimization 
 
 ## Basic Workflow
 
@@ -154,9 +154,13 @@ https://opensource.org/license/mit
 
 - 🌐 Website: [anemll.com](https://anemll.com)
 - 🤗 Models: [huggingface.co/anemll](https://huggingface.co/anemll)
-- 📱 Twitter: [@anemll](https://x.com/anemll)
+- 📱 X: [@anemll](https://x.com/anemll)
 - 💻 GitHub: [github.com/anemll](https://github.com/anemll)
 
 ## Contact
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Anemll/Anemll&type=Date)](https://star-history.com/#Anemll/Anemll&Date)
 
 For any questions or support, reach out to us at [realanemll@gmail.com](mailto:realanemll@gmail.com)
