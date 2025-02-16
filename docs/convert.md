@@ -1,20 +1,30 @@
 # ANEMLL Convert Workflow
 
 > [!Important]
-> This guide explains how to convert and run LLAMA 3.2 1B model using ANEMLL.
-> - ANE models on iOS are limited to 1GB file size
-> - macOS supports up to ~2GB
-> - Models are split during conversion to avoid these limits
+> This guide explains how to convert and run LLAMA models using ANEMLL.
+> **Source Models:**
+> - Note, only LLAMA architecture is supported im 0.1.2-alpha release
+> - Quantized models like GUFF or MLX are not supported yet
+> 
+> **Size Limits:**
+> - iOS models are limited to 1GB per file
+> - macOS supports up to ~2GB per file
+> - Models are automatically split during conversion to meet these limits
+> 
+> **System Requirements:**
 > - Requires macOS 15 or later
-> - This model is quantized to 6-bit LUT, its a bit slower vs 4-bit LUT, but provides better quality.
-> - For the fastest performance, use 4-bit LUT and 512 context length!
+> 
+> **Performance vs Quality:**
+> - Default is 6-bit LUT quantization (better quality, slower)
+> - 4-bit LUT quantization is faster but slightly lower quality
+> - For fastest performance, use 4-bit LUT with 512 context length
 
 # Quick Conversion Using Script
 
 For convenience, you can use the provided conversion script to perform all steps in one go. For detailed information about batch conversion, see [Convert Model Script](convert_model.md).
 
 ```bash
-./anemll/utils/convert_model.sh --model <path_to_model> --output <output_directory> [options]
+./anemll/utils/convert_model.sh --model <path_to_original_model_directory> --output <output_directory> [options]
 ```
 
 Basic usage example:
@@ -26,177 +36,151 @@ Basic usage example:
 
 > See [Convert Model Guide](convert_model.md) for detailed parameters and examples.
 
-# Manual Conversion Steps
+## Model Size and Chunks
 
-If you need more control over the conversion process, you can follow these detailed steps:
+Choose the number of chunks based on your model size. Here are the recommended configurations:
 
-# This guide is for LLAMA 3.2 1B Conversion and testing with chat.py app
+- 1B parameter models: 1 or more chunks
+  ```bash
+  --chunk 1  # Single chunk for basic use and LUT 6 or lower
+  ```
+- 3B parameter models: 2 or more chunks
+  ```bash
+  --chunk 2  # Minimum recommended for basic use and LUT 6 or lower
+  ```
+- 8B parameter models: 8 or more chunks
+  ```bash
+  --chunk 8  # Minimum recommended for basic use and LUT 6 or lower
+  ```
 
-1. Download the model from Hugging Face:
-URL: https://huggingface.co/meta-llama/Llama-3.2-1B/tree/main   
+Choose chunk count based on your model size and available system memory.
 
-2. Convert the model to the CoreML format using ANEMLL
-3. Run the model on the Apple Neural Engine using provide example code chat.py
-
-ANE models on iOS are limited to 1GB file size. macOS will work with ~2GB.
-We split modeles during conversion process to avoid this limit.
-
-Generally there are 3 models' parts for LLM:  embedding, Feed Forward Network/layers and LM Head.
-We call it part: 1, 2 and 3 respectively.
-LLama Model ANE optimized implemtation is in ./anemall/models/llama_model.py
-For FFN, we can split it in multiple chunks to allow for big models (like 8GB LLama/DeepSeek)
-
-# Components
-
-## ANE_converter
-./anemall/ANE_converter.py is the file that processes this by craeteing MLPakages for each part.
-We also create "Prefill" models for KV cache.  
-This implementation is using Stateful API for ANE, introduced in iOS 18 / macOS 15.
-
-## Combine_models
-./anemall/utils/combine_models.py is the file that combines FFN and prefill chunks into Multi-Function Chunks
-
-## Compile_models
-./anemll/utils/compile_models.py is the file that converts the model to MLModelC format for device inference
-
-## chat.py
-./tests/chat.py is the file that runs the model on the Apple Neural Engine using Python
-
-
-
-Below is generic workflow to convert LLAma 3.1 with 1024 context length and prefill h64 batch size
-
-## Conversion Steps
-
-### 1. Convert Embeddings (Part 1)
-> Creates `llama_embeddings.mlpackage`
-
+Complete examples for different model sizes:
 ```bash
-python -m anemll.ane_converter.llama_converter \
-    --part 1 \
-    --model "../Meta-Llama-3.2-1B"
-```
+# 1B model with single chunk (basic)
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-1B \
+    --output ./converted_models \
+    --chunk 1 \
+    --lut2 6 \
+    --lut3 6
 
-### 2. Convert LM Head (Part 3)
-> Creates `llama_lm_head_lut6.mlpackage` with 6-bit LUT quantization
-```bash
-python -m anemll.ane_converter.llama_converter \
-    --part 3 \
-    --lut 6 \
-    --model "../Meta-Llama-3.2-1B"
-```
-
-### 3. Convert FFN (Part 2)
-> CConvert FFN part  (2) splitting it into 2 chunks and 6-bit LUT quantization, 
-it creates `llama_FFN_PF_lut6_chunk_[01-02]of02.mlpackage`
-```bash
-python -m anemll.ane_converter.llama_converter \
-    --part 2 \
-    --lut 6 \
+# 3B model with recommended chunks
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-3B \
+    --output ./converted_models \
     --chunk 2 \
-    --context-length 1024 \
-    --batch-size 64 \
-    --model "../Meta-Llama-3.2-1B"
+    --lut2 6 \
+    --lut3 6
+
+# 8B model with recommended chunks
+./anemll/utils/convert_model.sh \
+    --model ../DeepSeek-8B \
+    --output ./converted_models \
+    --chunk 8 \
+    --lut2 6 \
+    --lut3 6 \
+    --prefix DeepSeek
 ```
 
-### 4. Convert Prefill (Part 2_prefill)
-> Creates prefill model chunks for KV cache optimization
+
+## Changing Context Size
+
+To change the context size during conversion, use the `--context` option. This allows you to specify the maximum context length for the model.
+
+Example:
 ```bash
-python -m anemll.ane_converter.llama_converter \
-    --part 2_prefill \
-    --lut 6 \
-    --chunk 2 \
-    --context-length 1024 \
-    --batch-size 64 \
-    --model "../Meta-Llama-3.2-1B"
+# Convert with a context size of 1024
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-1B \
+    --output ./converted_models \
+    --context 1024
 ```
 
+## Restarting and Running Single Steps
 
-### 5. Combine Models
-After we have MLpackages, we merge FFN and prefill chunks into Multi-Function Chunks.
-This allows us to reduce weight size by 50% because KV pre-fill and FFN are using the same weights.
+### Restarting from a Specific Step
+If the conversion process fails or you need to resume from a specific step, use the `--restart` option. This allows you to continue the conversion from the specified step without starting over.
 
+Example:
 ```bash
-# Basic usage (in models directory)
-python ./anemll/utils/combine_models.py \
-    --lut 6 \
-    --chunk 2
-
-# With explicit input/output directories
-python ./anemll/utils/combine_models.py \
-    --lut 6 \
-    --chunk 2 \
-    --input ./models \
-    --output ./combined_models
+# Resume from step 5 (Combine Models)
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-1B \
+    --output ./converted_models \
+    --restart 5
 ```
 
-### 6. Compile Models
-> Converts to MLModelC format for device inference
+### Running a Single Step
+To execute only a specific step and then exit, use the `--only` option. This is useful for testing or when you only need to perform one part of the conversion process.
+
+Example:
 ```bash
-python ./anemll/utils/compile_models.py 1
-python ./anemll/utils/compile_models.py 3 --lut 6
-python ./anemll/utils/compile_models.py 2 --lut 6 --chunk 2
+# Only run step 6 (Compile Models)
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-1B \
+    --output ./converted_models \
+    --only 6
 ```
 
-### 7. Test with chat.py
-> There are two options for testing:
+Available steps:
+1. Convert Embeddings
+2. Convert LM Head
+3. Convert FFN
+4. Convert Prefill
+5. Combine Models
+6. Compile Models
+7. Copy Tokenizer & Create meta.yaml
+8. Test Conversion
 
-#### Standard Chat (chat.py)
+## Troubleshooting
 
- Option 1 - Using meta.yaml (recommended):
- ```bash
- python ./tests/chat.py \
-     --meta ./converted_models/meta.yaml
- ```
- 
- Option 2 - Manual configuration:
- ```bash
- python ./tests/chat.py \
-     --embed llama_embeddings \
-     --lmhead llama_lm_head_lut6 \
-     --ffn llama_FFN_PF_lut6_chunk_01of02 \
-     --tokenizer ../Meta-Llama-3.2-1B \
-     --context-length 1024
- ```
+If conversion fails:
 
-> Note: If you used [convert_model.sh](convert_model.md) to convert the model, you can also run chat using the generated meta.yaml:
+1. Check error messages for the failing step.
+2. Use `--restart N` to resume from a specific step.
+3. Verify input/output directory permissions.
+4. Ensure enough disk space is available.
+5. Check that all required files exist in the model directory.
+
+Convert Model Script check dependencies on startup. If you're confident the dependency check is incorrectly failing, you can skip it:
+```bash
+# Skip dependency checks (use with caution)
+./anemll/utils/convert_model.sh \
+    --model ../Meta-Llama-3.2-1B \
+    --output ./converted_models \
+    --skip-check
 ```
-## Output Files
 
-After conversion and compilation, you should have:
+For more detailed troubleshooting, please refer to the [Troubleshooting Guide](./troubleshooting.md).
 
-### MLPackage Files (Intermediate)
-- `llama_embeddings.mlpackage`
-- `llama_lm_head_lut6.mlpackage`
-- Two FFN chunk files:
-  - `llama_FFN_PF_lut6_chunk_01of02.mlpackage`
-  - `llama_FFN_PF_lut6_chunk_02of02.mlpackage`
+## Preparing for Hugging Face Upload
 
-### MLModelC Files (Final)
-> These are the compiled files used for inference
-- `llama_embeddings.mlmodelc/`
-- `llama_lm_head_lut6.mlmodelc/`
-- Two FFN chunk directories:
-  - `llama_FFN_PF_lut6_chunk_01of02.mlmodelc/`
-  - `llama_FFN_PF_lut6_chunk_02of02.mlmodelc/`
+For detailed instructions on uploading models to Hugging Face, see [Model Upload Guide](./upload_model.md).
 
-> [!Note]
-> The .mlmodelc files are actually directories containing the compiled model assets.
-> These are the files that should be included in your application for inference.
+Quick example:
+```bash
+# Prepare model for Hugging Face
+./anemll/utils/prepare_hf.sh \
+    --input ./converted_models \
+    --output ./hf_model \
+    --org anemll
+```
 
-## Additional Information
 
-- The FFN chunks are combined with prefill functionality to optimize storage
-- Context length can be configured (example uses 1024)
-- Batch size affects prefill performance (example uses 64)
-- LUT quantization helps reduce model size (example uses 6-bit)
+After conversion, test your model using the chat interface:
+```bash
+# Basic chat interface
+python ./tests/chat.py --meta ./converted_models/meta.yaml
 
-For more details about the implementation, see:
-- `./anemall/models/llama_model.py` - Core model implementation
-- `./anemall/ane_converter/llama_converter.py` - Conversion logic
-- `./tests/chat.py` - Example chat interface
+# Full chat interface with conversation history
+python ./tests/chat_full.py --meta ./converted_models/meta.yaml
+```
+
+See [Chat Guide](./chat.md) for detailed usage of chat interfaces.
 
 ## See Also
+- [Manual Conversion Steps](manual_conversion.md) - For detailed conversion steps
 - [Converting DeepSeek Models](ConvertingDeepSeek.md) - For larger model conversion
 - [Compile Models Documentation](compile_models.md) - Details about compilation
 - [Combine Models Documentation](combine_models.md) - Details about model combining
