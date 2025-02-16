@@ -31,6 +31,10 @@ The `convert_model.sh` script automates the conversion of LLAMA models to CoreML
 | `--chunk` | Number of chunks to split FFN/prefill | 2 |
 | `--prefix` | Prefix for model names | llama |
 
+## New Arguments
+
+- `--skip-check`: Skip the dependency check step.
+
 ## Examples
 
 ### Run Single Step
@@ -200,7 +204,7 @@ The script generates a meta.yaml file containing all model configuration:
 ```yaml
 model_info:
   name: anemll-ModelName-ctx1024
-  version: 0.1.1
+  version: 0.1.2
   parameters:
     context_length: 1024
     batch_size: 64
@@ -248,6 +252,8 @@ Where:
 ## Troubleshooting
 
 If conversion fails:
+
+For troubleshooting common issues, please refer to the [Troubleshooting Guide](./troubleshooting.md).
 
 1. Check error messages for the failing step
 2. Use `--restart N` to resume from a specific step

@@ -678,6 +678,10 @@ def parse_args():
     parser.add_argument('--prompt', type=str,
                        help='If specified, run once with this prompt and exit')
     
+    # Add no-warmup flag
+    parser.add_argument('--nw', action='store_true',
+                       help='Skip warmup phase')
+    
     # Model configuration
     parser.add_argument('--context-length', type=int,
                        help='Context length for the model (default: 512), if not provided, it will be detected from the model directory name ctxNUMBER')
@@ -783,17 +787,18 @@ def main():
         state = create_unified_state(ffn_models, metadata['context_length'])
         
         # Warmup runs to prevent Python GIL issues with CoreML !
-        for i in range(2):
-            chat_loop(
-                embed_model=embed_model,
-                ffn_models=ffn_models,
-                lmhead_model=lmhead_model,
-                tokenizer=tokenizer,
-                metadata=metadata,
-                state=state,
-                warmup=True,
-                auto_prompt="who are you?"
-            )
+        if not args.nw:
+            for i in range(2):
+                chat_loop(
+                    embed_model=embed_model,
+                    ffn_models=ffn_models,
+                    lmhead_model=lmhead_model,
+                    tokenizer=tokenizer,
+                    metadata=metadata,
+                    state=state,
+                    warmup=True,
+                    auto_prompt="who are you?"
+                )
         
         # Main run
         chat_loop(

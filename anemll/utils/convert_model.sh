@@ -20,6 +20,9 @@ MODEL_PATH=""
 OUTPUT_DIR=""
 NUM_CHUNKS=2   # Default number of chunks
 
+# Initialize SKIP_CHECK before parsing arguments
+SKIP_CHECK=false
+
 # Function to print usage
 print_usage() {
     echo "Usage: $0 --model <path_to_model> --output <output_directory> [options]"
@@ -35,6 +38,7 @@ print_usage() {
     echo "  --only          Run only specified step and exit (1-8)"
     echo "  --prefix        Prefix for model names (default: llama)"
     echo "  --chunk         Number of chunks to split FFN/prefill (default: 2)"
+    echo "  --skip-check    Skip the dependency check step"
     exit 1
 }
 
@@ -85,6 +89,10 @@ while [[ $# -gt 0 ]]; do
             NUM_CHUNKS="$2"
             shift 2
             ;;
+        --skip-check)
+            SKIP_CHECK=true
+            shift
+            ;;
         *)
             echo "Unknown parameter: $1"
             print_usage
@@ -120,6 +128,15 @@ OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)" || {
     # If output directory doesn't exist, get absolute path another way
     OUTPUT_DIR="$(cd "$(dirname "$OUTPUT_DIR")" && pwd)/$(basename "$OUTPUT_DIR")"
 }
+
+# Step 0: Check dependencies
+if [ "$SKIP_CHECK" = false ]; then
+    "$SCRIPT_DIR/check_dependencies.sh" --model "$MODEL_PATH" --output "$OUTPUT_DIR" "$@"
+    if [ $? -ne 0 ]; then
+        echo "Dependency check failed. Aborting."
+        exit 1
+    fi
+fi
 
 # Function to run step if restart_step is less than or equal to step number
 run_step() {
@@ -161,6 +178,7 @@ fi
 run_step 1 "Converting Embeddings" "python -m anemll.ane_converter.llama_converter \
     --part 1 \
     $LUT1_PARAM \
+    --context-length $CONTEXT_LENGTH \
     --prefix \"$PREFIX\" \
     --model \"$MODEL_PATH\" \
     --output \"$OUTPUT_DIR\""
@@ -174,6 +192,7 @@ fi
 run_step 2 "Converting LM Head" "python -m anemll.ane_converter.llama_converter \
     --part 3 \
     $LUT3_PARAM \
+    --context-length $CONTEXT_LENGTH \
     --prefix \"$PREFIX\" \
     --model \"$MODEL_PATH\" \
     --output \"$OUTPUT_DIR\""
@@ -246,7 +265,7 @@ PREFIX = sys.argv[8]
 OUTFILE = sys.argv[9]
 meta = f'''model_info:
   name: anemll-{MODEL_NAME}-ctx{CONTEXT}
-  version: 0.1.1
+  version: 0.1.2
   description: |
     Demonstarates running {MODEL_NAME} on Apple Neural Engine
     Context length: {CONTEXT}

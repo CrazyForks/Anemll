@@ -42,6 +42,9 @@ python ./tests/chat_full.py \
   - Tokens per second (t/s)
   - Time to first token (TTFT)
   - Total tokens generated
+- **Thinking Mode**: Toggle thinking mode with `/t` command to enable deep reasoning processes for DeepHermes
+- **No Warmup Option**: Use `--nw` flag to skip the warmup phase for faster startup
+We use warm up models to prevent CoreML/Python GIL race conditions. You can skip the warmup phase for bigger models.
 
 ## Using meta.yaml
 
@@ -67,6 +70,7 @@ python ./tests/chat_full.py --meta ./converted_models/meta.yaml
 | `--context-length` | Context length for model | 512 |
 | `--meta` | Path to meta.yaml for automatic configuration | none |
 | `--prompt` | Run once with this prompt and exit | none |
+| `--nw` | Skip warmup phase | false |
 
 ## Model Paths
 

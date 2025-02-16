@@ -1,3 +1,4 @@
+*.pyc
 bin/
 lib/
 share/
@@ -11,4 +12,4 @@ R1-min2.py
 anemll-env/pyvenv.cfg
 .gitignore
 anemll/ane_converter/__pycache__/
-anemll/models/__pycache__/
+anemll/models/__pycache__/*
