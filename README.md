@@ -24,6 +24,7 @@ See [Roadmap.md](./docs/Roadmap.md) for more details
 - Dependency checks and troubleshooting guide [docs/troubleshooting.md](./docs/troubleshooting.md) added
 - Prefill batch size added to the conversion script
 - Chat_full interface updated for DeepHermes "think" token "/t" and both chat interfaces added --nw flag to skip warmup step ( [docs/chat.md](./docs/chat.md) )
+- XCode Tools dependency added to the README
 
 
 ## Basic Workflow
@@ -117,7 +118,16 @@ pip install -r requirements.txt
 # pip install anemll
 # due to Alpha Release, we do not recommend installing ANEMLL as a package yet
 ```
-
+CoreML compiler is required to compile the model. It is part of the Xcode command line tools.
+- Ensure that Xcode Command Line Tools are installed, as they include `coremlcompiler`.
+- You can install them by running `xcode-select --install`.
+- Verify that the `xcrun` command is available and correctly configured in your PATH.
+- Use `xcrun --find coremlcompiler` to verify the installation.
+- If above fails, please try following steps:
+- Download Xcode from the App Store.
+- Run `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer/` to set the path.
+- Use `xcrun --find coremlcompiler` to verify the installation.
+- Run `sudo xcodebuild -license` and agree to the license.
 
 
 ## Model Support
