@@ -5,15 +5,14 @@
 
 # Function to display usage
 usage() {
-    echo "Usage: $0 [--skip-check] [--model <model_directory>] [--context <context_length>] [other options for convert_model.sh]"
+    echo "Usage: $0 [--skip-check] [--model <model_directory>] [--context <context_length>] [--batch <batch_size>] [other options for convert_model.sh]"
     exit 1
 }
 
 # Parse arguments
 SKIP_CHECK=false
 MODEL_DIR=""
-CONTEXT_LENGTH=512  # Default context length
-CONVERT_ARGS=""  # Initialize empty string for convert args
+CONVERT_ARGS=""
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --skip-check)
@@ -22,17 +21,20 @@ while [[ "$#" -gt 0 ]]; do
             ;;
         --model)
             MODEL_DIR="$2"
-            CONVERT_ARGS+="--model \"$2\" "  # Add to convert args
+            CONVERT_ARGS+=" --model $2"
             shift 2
             ;;
         --context)
-            CONTEXT_LENGTH="$2"
-            CONVERT_ARGS+="--context \"$2\" "  # Add to convert args
+            CONVERT_ARGS+=" --context $2"
+            shift 2
+            ;;
+        --batch)
+            CONVERT_ARGS+=" --batch $2"
             shift 2
             ;;
         *)
             # Pass other arguments to convert_model.sh
-            CONVERT_ARGS+="$1 "
+            CONVERT_ARGS+=" $1"
             shift
             ;;
     esac
@@ -41,7 +43,6 @@ done
 # Check dependencies unless --skip-check is provided
 if [ "$SKIP_CHECK" = false ]; then
     echo "Checking dependencies..."
-    echo "Using context length: $CONTEXT_LENGTH"
     echo "Checking if macOS version is 15 or higher..."
     macos_version=$(sw_vers -productVersion | awk -F '.' '{print $1}')
     if [ "$macos_version" -lt 15 ]; then

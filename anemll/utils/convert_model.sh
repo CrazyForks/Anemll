@@ -179,6 +179,7 @@ run_step 1 "Converting Embeddings" "python -m anemll.ane_converter.llama_convert
     --part 1 \
     $LUT1_PARAM \
     --context-length $CONTEXT_LENGTH \
+    --batch-size $BATCH_SIZE \
     --prefix \"$PREFIX\" \
     --model \"$MODEL_PATH\" \
     --output \"$OUTPUT_DIR\""

@@ -193,6 +193,89 @@ def load_model(path, function_name=None):
             print("\nTry using the .mlpackage version instead, or recompile the model.")
         raise
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Full Chat with CoreML LLaMA with context window shifting (c) 2025 Anemll')
+    
+    # Add meta.yaml option
+    parser.add_argument('--meta', type=str, help='Path to meta.yaml to load all parameters')
+    
+    # Add existing arguments
+    parser.add_argument('--d', '--dir', type=str, default='.',
+                       help='Directory containing model files (default: current directory)')
+    parser.add_argument('--embed', type=str, required=False,
+                       help='Path to embeddings model (relative to --dir)')
+    parser.add_argument('--ffn', type=str, required=False,
+                       help='Path to FFN model (can be chunked, relative to --dir)')
+    parser.add_argument('--lmhead', type=str, required=False,
+                       help='Path to LM head model (relative to --dir)')
+    parser.add_argument('--tokenizer', type=str, required=False,
+                       help='Path to tokenizer')
+    
+    # Add new argument for auto-generation
+    parser.add_argument('--prompt', type=str,
+                       help='If specified, run once with this prompt and exit')
+    
+    # Add no-warmup flag
+    parser.add_argument('--nw', action='store_true',
+                       help='Skip warmup phase')
+    
+    # Model configuration
+    parser.add_argument('--context-length', type=int,
+                       help='Context length for the model (default: 512), if not provided, it will be detected from the model directory name ctxNUMBER')
+    parser.add_argument('--batch-size', type=int,
+                       help='Batch size for prefill (default: 64)')
+    
+    args = parser.parse_args()
+    
+    # If meta.yaml is provided, load parameters from it
+    if args.meta:
+        try:
+            with open(args.meta, 'r') as f:
+                meta = yaml.safe_load(f)
+            params = meta['model_info']['parameters']
+            
+            # Set model directory to meta.yaml directory if not specified
+            if not args.d or args.d == '.':
+                args.d = str(Path(args.meta).parent)
+            
+            # Build model paths based on parameters
+            prefix = params.get('model_prefix', 'llama')  # Default to 'llama' if not specified
+            lut_ffn = f"_lut{params['lut_ffn']}" if params['lut_ffn'] != 'none' else ''
+            lut_lmhead = f"_lut{params['lut_lmhead']}" if params['lut_lmhead'] != 'none' else ''
+            num_chunks = int(params['num_chunks'])
+            
+            # Set model paths if not specified
+            if not args.embed:
+                args.embed = f'{prefix}_embeddings'
+            if not args.lmhead:
+                args.lmhead = f'{prefix}_lm_head{lut_lmhead}'
+            if not args.ffn:
+                args.ffn = f'{prefix}_FFN_PF{lut_ffn}_chunk_01of{num_chunks:02d}'
+            if not args.tokenizer:
+                args.tokenizer = args.d
+            
+            # Set other parameters if not overridden by command line
+            if args.context_length is None:
+                args.context_length = int(params['context_length'])
+            if args.batch_size is None:
+                args.batch_size = int(params['batch_size'])
+            args.num_chunks = num_chunks
+            
+            print(f"\nLoaded parameters from {args.meta}:")
+            print(f"  Context Length: {args.context_length}")
+            print(f"  Batch Size: {args.batch_size}")
+            print(f"  Num Chunks: {args.num_chunks}")
+            print(f"  Models Directory: {args.d}")
+            print(f"  Embeddings: {args.embed}")
+            print(f"  LM Head: {args.lmhead}")
+            print(f"  FFN: {args.ffn}")
+            
+        except Exception as e:
+            print(f"\nError loading meta.yaml: {str(e)}")
+            sys.exit(1)
+    
+    return args
+
 def load_metadata(model,args):
     # Extract metadata and config parameters
     metadata = {}
@@ -248,18 +331,28 @@ def load_metadata(model,args):
         else:
             ctx_len = args.context_length
 
-        # Use defaults
+        # Use defaults or values from args
         metadata['context_length'] = ctx_len
         metadata['state_length'] = ctx_len
-        metadata['batch_size'] = 64
+        # Get batch size from args or use default
+        metadata['batch_size'] = getattr(args, 'batch_size', 64)
         metadata['lut_bits'] = 4
-        metadata['num_chunks'] = 4
-        print("\nUsing default parameters:")
+        metadata['num_chunks'] = getattr(args, 'num_chunks', 4)
+        print("\nUsing parameters:")
         print(f"  Context Length: {metadata['context_length']}")
         print(f"  State Length: {metadata['state_length']}")
         print(f"  Prefill Batch Size: {metadata['batch_size']}")
         print(f"  LUT Bits: {metadata['lut_bits']}")
         print(f"  Number of Chunks: {metadata['num_chunks']}")
+
+    # Override with values from args if they exist
+    if hasattr(args, 'batch_size') and args.batch_size is not None:
+        metadata['batch_size'] = args.batch_size
+        print(f"\nOverriding batch size from args: {args.batch_size}")
+    if hasattr(args, 'num_chunks') and args.num_chunks is not None:
+        metadata['num_chunks'] = args.num_chunks
+        print(f"\nOverriding num chunks from args: {args.num_chunks}")
+    
     return metadata
     
 def load_models(args,metadata):
@@ -768,81 +861,7 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
             traceback.print_exc()
 
 def main():
-    parser = argparse.ArgumentParser(description='Full Chat with CoreML LLaMA with context window shifting (c) 2025 Anemll')
-    
-    # Add meta.yaml option
-    parser.add_argument('--meta', type=str, help='Path to meta.yaml to load all parameters')
-    
-    # Add existing arguments
-    parser.add_argument('--d', '--dir', type=str, default='.',
-                       help='Directory containing model files (default: current directory)')
-    parser.add_argument('--embed', type=str, required=False,
-                       help='Path to embeddings model (relative to --dir)')
-    parser.add_argument('--ffn', type=str, required=False,
-                       help='Path to FFN model (can be chunked, relative to --dir)')
-    parser.add_argument('--lmhead', type=str, required=False,
-                       help='Path to LM head model (relative to --dir)')
-    parser.add_argument('--tokenizer', type=str, required=False,
-                       help='Path to tokenizer')
-    
-    # Add new argument for auto-generation
-    parser.add_argument('--prompt', type=str,
-                       help='If specified, run once with this prompt and exit')
-    
-    # Add no-warmup flag
-    parser.add_argument('--nw', action='store_true',
-                       help='Skip warmup phase')
-    
-    # Model configuration
-    parser.add_argument('--context-length', type=int,
-                       help='Context length for the model (default: 512), if not provided, it will be detected from the model directory name ctxNUMBER')
-    
-    args = parser.parse_args()
-    
-    # If meta.yaml is provided, load parameters from it
-    if args.meta:
-        try:
-            with open(args.meta, 'r') as f:
-                meta = yaml.safe_load(f)
-            params = meta['model_info']['parameters']
-            
-            # Set model directory to meta.yaml directory if not specified
-            if not args.d or args.d == '.':
-                args.d = str(Path(args.meta).parent)
-            
-            # Build model paths based on parameters
-            prefix = params.get('model_prefix', 'llama')  # Default to 'llama' if not specified
-            lut_ffn = f"_lut{params['lut_ffn']}" if params['lut_ffn'] != 'none' else ''
-            lut_lmhead = f"_lut{params['lut_lmhead']}" if params['lut_lmhead'] != 'none' else ''
-            num_chunks = int(params['num_chunks'])
-            
-            # Set model paths if not specified
-            if not args.embed:
-                args.embed = f'{prefix}_embeddings'
-            if not args.lmhead:
-                args.lmhead = f'{prefix}_lm_head{lut_lmhead}'
-            if not args.ffn:
-                args.ffn = f'{prefix}_FFN_PF{lut_ffn}_chunk_01of{num_chunks:02d}'
-            if not args.tokenizer:
-                args.tokenizer = args.d
-            
-            # Set other parameters
-            args.context_length = int(params['context_length'])
-            args.batch_size = int(params['batch_size'])
-            args.num_chunks = num_chunks
-            
-            print(f"\nLoaded parameters from {args.meta}:")
-            print(f"  Context Length: {args.context_length}")
-            print(f"  Batch Size: {args.batch_size}")
-            print(f"  Num Chunks: {args.num_chunks}")
-            print(f"  Models Directory: {args.d}")
-            print(f"  Embeddings: {args.embed}")
-            print(f"  LM Head: {args.lmhead}")
-            print(f"  FFN: {args.ffn}")
-            
-        except Exception as e:
-            print(f"\nError loading meta.yaml: {str(e)}")
-            sys.exit(1)
+    args = parse_args()
     
     # Convert directory to absolute path
     model_dir = Path(args.d).resolve()
