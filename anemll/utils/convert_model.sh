@@ -293,12 +293,7 @@ fi
 
 # Step 8: Test with chat.py
 run_step 8 "Testing with chat.py" "python \"$PROJECT_ROOT/tests/chat.py\" \
-    --embed ${PREFIX}_embeddings \
-    --lmhead ${PREFIX}_lm_head${LUT3_PARAM:+_lut$LUT_PART3} \
-    --ffn ${PREFIX}_FFN_PF${LUT2_PARAM:+_lut$LUT_PART2}_chunk_01of$(printf "%02d" $NUM_CHUNKS) \
-    --tokenizer \"$OUTPUT_DIR\" \
-    --context-length $CONTEXT_LENGTH \
-    --d \"$OUTPUT_DIR\" \
+    --meta \"$OUTPUT_DIR/meta.yaml\" \
     --prompt \"Who are you ?\""
 
 # Print chat.py command for reference
