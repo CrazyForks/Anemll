@@ -386,11 +386,19 @@ def make_causal_mask(length, start):
     mask[:, :, col_indices <= (row_indices + start)] = 0
     return mask
 
-def run_prefill(embed_model, ffn_models, input_ids, context_pos, context_length, batch_size=64, state=None):
-    """Run prefill on the input sequence."""
-    # Create causal mask
+def initialize_causal_mask(context_length):
+    """Initialize causal mask for transformer attention."""
     causal_mask = make_causal_mask(context_length, 0)
     causal_mask = torch.tensor(causal_mask, dtype=torch.float16)
+    print(f"\nInitialized causal mask for context length {context_length}")
+    return causal_mask
+
+def run_prefill(embed_model, ffn_models, input_ids, context_pos, context_length, batch_size=64, state=None, causal_mask=None):
+    """Run prefill on the input sequence."""
+    # Use provided causal mask or create one if not provided
+    if causal_mask is None:
+        causal_mask = make_causal_mask(context_length, 0)
+        causal_mask = torch.tensor(causal_mask, dtype=torch.float16)
     
     # Process in batches
     batch_pos = 0
@@ -433,7 +441,7 @@ def run_prefill(embed_model, ffn_models, input_ids, context_pos, context_length,
     
     return torch.tensor([context_pos], dtype=torch.int32)
 
-def generate_next_token(embed_model, ffn_models, lmhead_model, input_ids, pos, context_length, state=None, temperature=0.0):
+def generate_next_token(embed_model, ffn_models, lmhead_model, input_ids, pos, context_length, state=None, causal_mask=None, temperature=0.0):
     """Generate the next token."""
     # Get current token
     current_token = input_ids[:, pos-1:pos]  # [1, 1]
@@ -447,8 +455,13 @@ def generate_next_token(embed_model, ffn_models, lmhead_model, input_ids, pos, c
     update_mask = torch.zeros((1, 1, context_length, 1), dtype=torch.float16)
     update_mask[0, 0, pos-1, 0] = 1.0
     position_ids = torch.tensor([pos-1], dtype=torch.int32)  # [1]
-    causal_mask = make_causal_mask(context_length, 0)
-    causal_mask = torch.tensor(causal_mask[:, :, pos-1:pos, :], dtype=torch.float16)  # [1, 1, 1, context_length]
+    
+    # Use provided causal mask or create one if not provided
+    if causal_mask is None:
+        causal_mask_data = make_causal_mask(context_length, 0)
+        single_causal_mask = torch.tensor(causal_mask_data[:, :, pos-1:pos, :], dtype=torch.float16)  # [1, 1, 1, context_length]
+    else:
+        single_causal_mask = causal_mask[:, :, pos-1:pos, :]
     
     # Run through FFN chunks with state
     for ffn_model in ffn_models:
@@ -457,7 +470,7 @@ def generate_next_token(embed_model, ffn_models, lmhead_model, input_ids, pos, c
                 'hidden_states': hidden_states.numpy(),
                 'update_mask': update_mask.numpy(),
                 'position_ids': position_ids.numpy(),
-                'causal_mask': causal_mask.numpy(),
+                'causal_mask': single_causal_mask.numpy(),
                 'current_pos': position_ids.numpy()
             }
             output = ffn_model['infer'].predict(inputs, state)
@@ -503,7 +516,7 @@ def create_unified_state(ffn_models, context_length):
         print("\nCreated unified transformer state")
         return state
 
-def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state, auto_prompt=None, warmup=False):
+def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state, causal_mask=None, auto_prompt=None, warmup=False):
     """Interactive chat loop."""
     context_length = metadata.get('context_length')
     batch_size = metadata.get('batch_size', 64)
@@ -577,7 +590,7 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
                 # Start prefill timing
                 prefill_start = time.time()
                 
-                # Run prefill with state
+                # Run prefill with state and causal mask
                 current_pos = run_prefill(
                     embed_model,
                     ffn_models,
@@ -585,7 +598,8 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
                     context_pos,
                     context_length,
                     batch_size,
-                    state
+                    state,
+                    causal_mask
                 )
                 
                 # Calculate prefill timing
@@ -600,7 +614,7 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
                 inference_tokens = 0
                 
                 while pos < context_length - 1:
-                    # Generate next token
+                    # Generate next token with causal mask
                     next_token = generate_next_token(
                         embed_model,
                         ffn_models,
@@ -608,7 +622,8 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
                         input_ids,
                         pos,
                         context_length,
-                        state
+                        state,
+                        causal_mask
                     )
                     
                     # Add token to sequence
@@ -667,7 +682,7 @@ def chat_loop(embed_model, ffn_models, lmhead_model, tokenizer, metadata, state,
         traceback.print_exc()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Chat with CoreML LLaMA (c) 2025 Anemll')
+    parser = argparse.ArgumentParser(description='Chat with CoreML LLaMA, gil resolved  (c) 2025 Anemll')
     
     # Add meta.yaml option
     parser.add_argument('--meta', type=str, help='Path to meta.yaml to load all parameters')
@@ -800,6 +815,9 @@ def main():
         # Create unified state once
         state = create_unified_state(ffn_models, metadata['context_length'])
         
+        # Initialize causal mask once
+        causal_mask = initialize_causal_mask(metadata['context_length'])
+        
         # Warmup runs to prevent Python GIL issues with CoreML !
         if not args.nw:
             for i in range(2):
@@ -810,6 +828,7 @@ def main():
                     tokenizer=tokenizer,
                     metadata=metadata,
                     state=state,
+                    causal_mask=causal_mask,  # Pass the causal mask
                     warmup=True,
                     auto_prompt="who are you?"
                 )
@@ -822,6 +841,7 @@ def main():
             tokenizer=tokenizer,
             metadata=metadata,
             state=state,
+            causal_mask=causal_mask,  # Pass the causal mask
             warmup=False,
             auto_prompt=args.prompt
         )
